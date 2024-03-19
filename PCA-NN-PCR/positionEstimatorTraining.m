@@ -203,51 +203,6 @@ end
 end
 
 
-% function binned_data = get_binned_firing_rates(trial, bin_size, scale_window)
-% binned_data = struct;
-% [num_trial, num_direc] = size(trial);
-% 
-% [min_trial_duration, max_trial_duration] = findMinMaxTrialDuration(trial);
-% 
-% win = 10 * (scale_window / bin_size);
-% normstd = scale_window / bin_size;
-% alpha = (win - 1) / (2 * normstd);
-% temp1 = -(win - 1) / 2 : (win - 1) / 2;
-% gaussian_window = exp((-1 / 2) * (alpha * temp1 / ((win - 1) / 2)) .^ 2)';
-% gaussian_window = gaussian_window / sum(gaussian_window);
-% 
-% for j = 1:num_direc
-%     for i = 1:num_trial
-%         all_neuro_spikes_data = trial(i,j).spikes(:,1:min_trial_duration); % all_neuro_spikes is of (98 x spike_duration)
-%         num_neurons = size(trial(i,j).spikes,1);
-% %         each_spike_duration = size(all_neuro_spikes_data,2);
-%         binned_time = 1:bin_size:min_trial_duration + bin_size;
-%         binned_spikes = zeros(num_neurons,length(binned_time)-1);
-% 
-%         smoothed_spikes = zeros(size(binned_spikes));
-% 
-%         for n = 1:num_neurons
-%             spike_index = find(all_neuro_spikes_data(n, :) == 1);
-%             binned_spikes(n, :) = histcounts(spike_index, binned_time);
-%             
-%             smoothed_spikes(n, :) = conv(binned_spikes(n, :), gaussian_window, 'same');
-%             
-%         end
-%         binned_firing_rates = smoothed_spikes*(1000/bin_size);
-% 
-% %         tempx = trial(i, j).handPos(1, 1:min_trial_duration);
-% %         tempy = trial(i, j).handPos(2, 1:min_trial_duration);
-% %         binned_handPos_x = tempx(1:bin_size:end);
-% %         binned_handPos_y = tempy(1:bin_size:end);
-% 
-%         binned_data(i, j).binned_spikes = binned_spikes;
-%         binned_data(i, j).binned_firing_rates = binned_firing_rates;
-% %         binned_data(i, j).binned_handPos = [binned_handPos_x; binned_handPos_y];
-%     end
-% end 
-% end
-
-
 
 % function [x_hand_pos, y_hand_pos] = get_hand_pos_data (trial, bin_size)
 % % 
