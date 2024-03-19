@@ -51,9 +51,11 @@ net = modelParameters.net;
 bin_size = 20;
 past_current_trial = test_data;
 start_time = 320;
+% window_size = 50;
 
 %  binning to get binned firing rates
 binned_data = get_binned_firing_rates(past_current_trial, bin_size);
+% binned_data = get_binned_firing_rates(past_current_trial, bin_size, window_size);
 [num_neurons, num_time_bins] = size(binned_data(1,1).binned_firing_rates);
 
 % get average rate for NN to predict direction
@@ -68,7 +70,7 @@ test_time_bin = (spikes_data_length/bin_size) - (start_time/bin_size)+1;
 max_timebin_index = modelParameters.max_timebin_index;
 data_max_time_bin = max_timebin_index - (start_time/bin_size);
 
-if test_time_bin <= data_max_time_bin
+if spikes_data_length <= max_timebin_index*bin_size
 
 firing_rates = reshape(binned_data.binned_firing_rates,[],1);
 % disp(size(spikes_data_length))
@@ -80,13 +82,17 @@ bx = modelParameters.pcr(pred_direc,test_time_bin).bx;
 by = modelParameters.pcr(pred_direc,test_time_bin).by;
 ex = modelParameters.pcr(pred_direc,test_time_bin).ex(:,pred_direc);
 ey = modelParameters.pcr(pred_direc,test_time_bin).ey(:,pred_direc);
+% ex = 0;
+% ey = 0;
 mean_firing = modelParameters.pcr(pred_direc,test_time_bin).mean_firing;
-x = (firing_rates)'*bx + ex;
-y = (firing_rates)'*by + ey;
-x = x(test_time_bin,1);
-y = y(test_time_bin,1);
+x = (firing_rates-mean(mean_firing))'*bx + ex;
+y = (firing_rates-mean(mean_firing))'*by + ey;
+% x = (firing_rates)'*bx + ex;
+% y = (firing_rates)'*by + ey;
+x = x(spikes_data_length,1);
+y = y(spikes_data_length,1);
 % disp(x)
-elseif test_time_bin > data_max_time_bin
+elseif spikes_data_length > max_timebin_index*bin_size
 
 firing_rates = reshape(binned_data.binned_firing_rates,[],1);
 pred_direc = classify(net, test_avg_rates');
@@ -95,11 +101,15 @@ bx = modelParameters.pcr(pred_direc,data_max_time_bin).bx;
 by = modelParameters.pcr(pred_direc,data_max_time_bin).by;
 ex = modelParameters.pcr(pred_direc,data_max_time_bin).ex(:,pred_direc);
 ey = modelParameters.pcr(pred_direc,data_max_time_bin).ey(:,pred_direc);
+% ex = 0;
+% ey = 0;
 mean_firing = modelParameters.pcr(pred_direc,data_max_time_bin).mean_firing;
 x = (firing_rates(1:length(bx)) - mean(firing_rates(1:length(bx))))'*bx + ex;
 y = (firing_rates(1:length(bx)) - mean(firing_rates(1:length(bx))))'*by + ey;
-x = x(test_time_bin,1);
-y = y(test_time_bin,1);
+% x = (firing_rates(1:length(bx)))'*bx + ex;
+% y = (firing_rates(1:length(bx)))'*by + ey;
+x = x(max_timebin_index*bin_size,1);
+y = y(max_timebin_index*bin_size,1);
 % x=0;
 % y=0;
 end
@@ -129,20 +139,6 @@ end
 end
 
 
-function same_size_data = get_same_size_data(trial, min_trial_duration)
-same_size_data = struct;
-[num_trial, num_direc] = size(trial);
-for j = 1:num_direc
-    for i = 1:num_trial
-        all_neuro_spikes_data = trial(i,j).spikes(:,1:min_trial_duration);
-        tempx = trial(i, j).handPos(1, 1:min_trial_duration);
-        tempy = trial(i, j).handPos(2, 1:min_trial_duration);
-        same_size_data(i, j).spikes_adjusted = all_neuro_spikes_data;
-        same_size_data(i, j).x_hand_pos_adjusted = tempx;
-        same_size_data(i, j).x_hand_pos_adjusted = tempy;
-    end
-end
-end
 
 function binned_data = get_binned_firing_rates(trial, bin_size)
 binned_data = struct;
@@ -175,7 +171,49 @@ for j = 1:num_direc
 end 
 end
 
-
+% function binned_data = get_binned_firing_rates(trial, bin_size, scale_window)
+% binned_data = struct;
+% [num_trial, num_direc] = size(trial);
+% 
+% [min_trial_duration, max_trial_duration] = findMinMaxTrialDuration(trial);
+% 
+% win = 10 * (scale_window / bin_size);
+% normstd = scale_window / bin_size;
+% alpha = (win - 1) / (2 * normstd);
+% temp1 = -(win - 1) / 2 : (win - 1) / 2;
+% gaussian_window = exp((-1 / 2) * (alpha * temp1 / ((win - 1) / 2)) .^ 2)';
+% gaussian_window = gaussian_window / sum(gaussian_window);
+% 
+% for j = 1:num_direc
+%     for i = 1:num_trial
+%         all_neuro_spikes_data = trial(i,j).spikes(:,1:min_trial_duration); % all_neuro_spikes is of (98 x spike_duration)
+%         num_neurons = size(trial(i,j).spikes,1);
+% %         each_spike_duration = size(all_neuro_spikes_data,2);
+%         binned_time = 1:bin_size:min_trial_duration + bin_size;
+%         binned_spikes = zeros(num_neurons,length(binned_time)-1);
+% 
+%         smoothed_spikes = zeros(size(binned_spikes));
+% 
+%         for n = 1:num_neurons
+%             spike_index = find(all_neuro_spikes_data(n, :) == 1);
+%             binned_spikes(n, :) = histcounts(spike_index, binned_time);
+%             
+%             smoothed_spikes(n, :) = conv(binned_spikes(n, :), gaussian_window, 'same');
+%             
+%         end
+%         binned_firing_rates = smoothed_spikes*(1000/bin_size);
+% 
+% %         tempx = trial(i, j).handPos(1, 1:min_trial_duration);
+% %         tempy = trial(i, j).handPos(2, 1:min_trial_duration);
+% %         binned_handPos_x = tempx(1:bin_size:end);
+% %         binned_handPos_y = tempy(1:bin_size:end);
+% 
+%         binned_data(i, j).binned_spikes = binned_spikes;
+%         binned_data(i, j).binned_firing_rates = binned_firing_rates;
+% %         binned_data(i, j).binned_handPos = [binned_handPos_x; binned_handPos_y];
+%     end
+% end 
+% end
 
 function [x_hand_pos, y_hand_pos] = get_hand_pos_data (trial, bin_size)
 % 
