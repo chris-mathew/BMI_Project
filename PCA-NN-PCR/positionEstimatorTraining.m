@@ -21,7 +21,7 @@ function [modelParameters] = positionEstimatorTraining(training_data)
 all_trial_data = training_data;
 [num_trials, num_direc] = size(all_trial_data);
 
-[min_trial_duration, max_trial_duration] = findMinMaxTrialDuration(all_trial_data);
+min_trial_duration = findMinMaxTrialDuration(all_trial_data);
 
 bin_size = 20;
 
@@ -75,7 +75,7 @@ for j = 1: num_direc
         mean_centered_x_pcr_data = x_hand_pos_current_direc(:,i) - mean(x_hand_pos_current_direc(:,i));
         mean_centered_y_pcr_data = y_hand_pos_current_direc(:,i) - mean(y_hand_pos_current_direc(:,i));
 
-        [whole_feat_space, ~, ~, ~, ~, sorted_eigenvectors, k] = getPCA(firing_data_current_direc, 0.8);
+        [whole_feat_space, ~, ~, k] = getPCA(firing_data_current_direc, 0.8);
         
         V = whole_feat_space(:,1:k);
         Z = V'*(firing_data_current_direc - mean(firing_data_current_direc,1)); % project principal components up to top k comp to data
@@ -122,26 +122,27 @@ layers = [
     fullyConnectedLayer(100)
     batchNormalizationLayer
     leakyReluLayer
-    dropoutLayer(0.2)
+    dropoutLayer(0.4)
 
     fullyConnectedLayer(50)
     batchNormalizationLayer
     leakyReluLayer
-    dropoutLayer(0.2)
-
+    dropoutLayer(0.3)
+    
+%     layerNormalizationLayer
     fullyConnectedLayer(num_direc)
     softmaxLayer
     classificationLayer];
 
 options = trainingOptions('rmsprop', ...
-    'MaxEpochs',100, ...
-    'MiniBatchSize', 64, ...
+    'MaxEpochs',150, ...
+    'MiniBatchSize', 32, ...
     'InitialLearnRate', 0.001, ...
     'Shuffle', 'every-epoch', ...
     'Verbose', false, ... 
     'ValidationData', {valData', valLabels'}, ...
-    'ValidationFrequency', 5,...
-    'Plots', 'training-progress');
+    'ValidationFrequency', 5);
+    %'Plots', 'training-progress');
 
 % Train the network
 net = trainNetwork(training_data', categorical_labels', layers, options);
@@ -151,20 +152,16 @@ modelParameters.net = net;
 
 % ---------- defined functions ----------
 
-function [min_trial_duration, max_trial_duration] = findMinMaxTrialDuration(trial)
+function min_trial_duration = findMinMaxTrialDuration(trial)
 [num_trial, num_direc] = size(trial);
 
 min_trial_duration = inf;
-max_trial_duration = 0;
 % find min trial duration
 for j = 1:num_direc
     for i = 1:num_trial
         current_trial_duration = size(trial(i,j).spikes,2);
         if current_trial_duration < min_trial_duration
             min_trial_duration = current_trial_duration; % Update minTrialDuration if current trial duration is shorter
-        end
-        if current_trial_duration > max_trial_duration
-            max_trial_duration = current_trial_duration; % Update if current duration is longer
         end
     end
 end
@@ -175,7 +172,7 @@ function binned_data = get_binned_firing_rates(trial, bin_size)
 binned_data = struct;
 [num_trial, num_direc] = size(trial);
 
-[min_trial_duration, max_trial_duration] = findMinMaxTrialDuration(trial);
+% [min_trial_duration, max_trial_duration] = findMinMaxTrialDuration(trial);
 
 for j = 1:num_direc
     for i = 1:num_trial
@@ -203,35 +200,12 @@ end
 end
 
 
-
-% function [x_hand_pos, y_hand_pos] = get_hand_pos_data (trial, bin_size)
-% % 
-% % binned_hand_pos_data = struct;
-% [num_trial, num_direc] = size(trial);
-% 
-% [min_trial_duration, max_trial_duration] = findMinMaxTrialDuration(trial);
-% 
-% x_hand_pos = zeros(num_trials,num_time_bins,num_direc);
-% y_hand_pos = zeros(num_trials,num_time_bins,num_direc);
-% 
-% for j = 1:num_direc
-%     for i = 1:num_trial
-%         tempx = trial(i, j).handPos(1, 1:min_trial_duration);
-%         tempy = trial(i, j).handPos(2, 1:min_trial_duration);
-%         binned_handPos_x = tempx(1:bin_size:end);
-%         binned_handPos_y = tempy(1:bin_size:end);
-%         x_hand_pos(i,:,j) = binned_handPos_x;
-%         y_hand_pos(i,:,j) = binned_handPos_y;
-%     end
-% end
-% end
-
 function [x_hand_pos_binned, y_hand_pos_binned, x_hand_pos, y_hand_pos] = get_hand_pos_data (trial, bin_size)
 % 
 % binned_hand_pos_data = struct;
 [num_trial, num_direc] = size(trial);
 
-[min_trial_duration, max_trial_duration] = findMinMaxTrialDuration(trial);
+% [min_trial_duration, max_trial_duration] = findMinMaxTrialDuration(trial);
 % [num_neurons, num_time_bins] = size(binned_data(1,1).binned_firing_rates);
 
 num_time_bins = length(1:bin_size:min_trial_duration);
@@ -256,25 +230,6 @@ num_time_bins = length(1:bin_size:min_trial_duration);
             y_hand_pos_binned(i,:,j) = binned_handPos_y;
         end
     end
-% x_hand_pos = zeros(num_trial, max_trial_duration, num_direc);
-% y_hand_pos = zeros(num_trial, max_trial_duration, num_direc);
-% 
-% num_time_bins = length(1:bin_size:max_trial_duration);
-% x_hand_pos_binned = zeros(num_trial, num_time_bins, num_direc);
-% y_hand_pos_binned = zeros(num_trial, num_time_bins, num_direc);
-% 
-% for j = 1:num_direc
-%     for i = 1:num_trial
-%         currentSize = size(trial(i, j).handPos, 2);
-%         padSize = max_trial_duration - currentSize;
-% 
-%         x_hand_pos(i, :, j) = [trial(i, j).handPos(1, :), trial(i, j).handPos(1, end) * ones(1, padSize)];
-%         y_hand_pos(i, :, j) = [trial(i, j).handPos(2, :), trial(i, j).handPos(2, end) * ones(1, padSize)];
-% 
-%         x_hand_pos_binned(i, :, j) = x_hand_pos(i, 1:bin_size:end, j);
-%         y_hand_pos_binned(i, :, j) = y_hand_pos(i, 1:bin_size:end, j);
-%     end
-% end
 end
 
 
@@ -301,30 +256,8 @@ end
 end
 
 
-function test_avg_rates = get_test_data(binned_test_data)
-[num_trial, num_direc] = size(binned_test_data);
-num_neurons = size(binned_test_data(1,1).binned_firing_rates, 1);
-% num_bins = length(binned_data(1,1).binned_firing_rates(1,:));
 
-% make it to 2D data of (num_trial x num_direc, num_neurons)
-data = zeros(num_trial * num_direc, num_neurons);
-% labels = zeros(num_trial * num_direc, 1);
-
-count = 1;
-for j = 1:num_direc
-    for i = 1:num_trial
-        % Flatten neuron firing rates for each trial
-        avg_firing_rates = mean(binned_test_data(i, j).binned_firing_rates, 2); 
-
-        data(count, :) = avg_firing_rates';
-%         labels(count) = j; % Direction label
-        count = count + 1;
-    end
-end
-end
-
-
-function [whole_feat_space, new_feat_space, eigenvalues, index, explained_variance, sorted_eigenvectors, k] = getPCA(binned_rates, threshold)
+function [whole_feat_space, sorted_eigenvalues, sorted_eigenvectors, k] = getPCA(binned_rates, threshold)
 if nargin < 2
         threshold = 0.8;
 end
@@ -332,7 +265,7 @@ end
 % Step 1: Standardize the data
 % binned_rates = binned_data.binned_firing_rates; % binned_firing_rates is (num_neurons x binned_rates)
 
-eps = 1e-25;
+% eps = 1e-25;
 standard_binned_data = (binned_rates - mean(binned_rates,2)); %./(std(binned_rates,0,2) + eps);
 
 % Step 2: Compute the covariance matrix
@@ -355,12 +288,12 @@ explained_variance = cumsum(sorted_eigenvalues)/sum(sorted_eigenvalues);
 k = find(explained_variance >= threshold , 1, 'first');
 
 % Step 6: Construct the projection matrix from the chosen number of top principal components
-top_k_eigenvectors = sorted_eigenvectors(:, 1:k);
+% top_k_eigenvectors = sorted_eigenvectors(:, 1:k);
 
 % Step 7: Compute the new k-dimensional feature space
 whole_feat_space = standard_binned_data * sorted_eigenvectors;
 whole_feat_space = whole_feat_space./sqrt(sum(whole_feat_space.^2));
-new_feat_space = standard_binned_data * top_k_eigenvectors;
+% new_feat_space = standard_binned_data * top_k_eigenvectors;
 
 end
 
